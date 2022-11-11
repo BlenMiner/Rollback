@@ -8,32 +8,14 @@ using System.Runtime.Serialization;
 using System;
 
 /// <summary>
-/// This interface allows to check if two structs are essentially different
-/// </summary>
-/// <typeparam name="T">The struct's type.</typeparam>
-public interface IError<T>
-{
-    /// <summary>
-    /// This usually should allow a small margin or error for float values, for example 0.0001f
-    /// Checking for float exact equality may lead to unecessary reconciliations
-    /// </summary>
-    /// <param name="other">The struct to compare to</param>
-    /// <returns>True if different, false if equal</returns>
-    bool HasError(T other)
-    {
-        return !other.Equals(this);
-    }
-}
-
-/// <summary>
 /// Fishnet networked authoritative controller with client prediction.
 /// The client controlling it has to be the owner.
 /// </summary>
 /// <typeparam name="I">Input struct (Describes input, usually keys, look direction, etc, can also be empty or just time)</typeparam>
 /// <typeparam name="S">State struct (This should describe the complete state at any frame for time travel)</typeparam>
 public abstract class AuthoritativeController<I, S> : NetworkBehaviour 
-    where I : struct, IError<I>
-    where S : struct, IError<S>
+    where I : struct
+    where S : struct
 {
 
     [System.Serializable]
@@ -138,11 +120,13 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
     /// <returns>The current player state</returns>
     public abstract S GatherCurrentState();
 
+    public abstract bool HasError(S stateA, S stateB);
+
     /// <summary>
     /// Using the given state, teleport and apply the state to the controller
     /// </summary>
     /// <param name="state">State to apply</param>
-    public abstract void ApplyMovementState(S state);
+    public abstract void ApplyState(S state);
 
     /// <summary>
     /// Using input and delta time move the player to the next frame
@@ -238,7 +222,7 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
             m_stateHistory.Write(m_serverTick, serverState);
 
 
-            if (serverState.HasError(clientState))
+            if (HasError(serverState, clientState))
             {
                 Reconcile(Owner, m_serverTick, ToArray(serverState));
             }
@@ -277,7 +261,7 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
         S serverState = ReadArray<S>(rawServerState);
 
         bool validClientState = m_stateHistory.Read(tick, out var clientState);
-        bool needsReconcile = clientState.HasError(serverState);
+        bool needsReconcile = HasError(clientState, serverState);
         
         if (!validClientState || !needsReconcile) return;
 
@@ -286,7 +270,7 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
         m_stateHistory.ClearFuture(tick, true);
         m_stateHistory.Write(tick, serverState);
 
-        ApplyMovementState(serverState);
+        ApplyState(serverState);
 
         for (ulong t = tick + 1; t <= presentTick; ++t)
         {
