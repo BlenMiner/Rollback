@@ -3,7 +3,11 @@ using UnityEngine;
 [System.Serializable]
 public struct BPlayerInput
 {
-    public Vector2Int MoveInput;
+    public int MoveInputX;
+
+    public int MoveInputY;
+
+    public Vector2Int MoveInput => new  (MoveInputX, MoveInputY);
 }
 
 [System.Serializable]
@@ -21,7 +25,8 @@ public class BetterPlayerController : AuthoritativeController<BPlayerInput, BPla
 
         return new BPlayerInput
         {
-            MoveInput = new Vector2Int(horizontal, vertical)
+            MoveInputX = horizontal,
+            MoveInputY = vertical
         };
     }
 
