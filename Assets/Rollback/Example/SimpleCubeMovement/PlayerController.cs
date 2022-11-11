@@ -78,6 +78,8 @@ public class PlayerController : NetworkBehaviour
 
     private void OnServerTick()
     {
+        if (IsOwner) return;
+
         if (m_inputHistory.Count >= m_minServerBufferSize)
         {
             if (m_inputHistory.Find(m_serverTick, out var index) && m_inputHistory.Count - index > m_maxServerBufferSize)
