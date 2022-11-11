@@ -40,7 +40,7 @@ public interface IAuthoritative<I, S>
 
     /// <summary>
     /// Check if two states are equal, you should add a margin for floating point error
-    /// 0.0001 is usually a good start
+    /// 0.001 is usually a good start
     /// </summary>
     /// <param name="stateA">Value A</param>
     /// <param name="stateB">Value B</param>
