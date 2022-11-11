@@ -2,7 +2,8 @@
     "name": "Rollback.Runtime",
     "rootNamespace": "",
     "references": [
-        "GUID:7c88a4a7926ee5145ad2dfa06f454c67"
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:8ccce8322c0a09d4da076678647fc0ee"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

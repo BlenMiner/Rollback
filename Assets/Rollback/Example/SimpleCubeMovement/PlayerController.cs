@@ -3,7 +3,7 @@ using FishNet.Object;
 using UnityEngine;
 using Riten.Rollback;
 
-public class PlayerController : NetworkBehaviour
+public sealed class PlayerController : NetworkBehaviour
 {
     public struct PlayerInput
     {
