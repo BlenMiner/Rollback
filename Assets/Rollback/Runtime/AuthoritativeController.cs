@@ -188,23 +188,23 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
         int minBuffer = m_authoritativeSettings.MinServerBufferSize;
         int maxBuffer = m_authoritativeSettings.MaxServerBufferSize;
 
-        if (m_inputHistory.Count >= minBuffer)
+        if (InputHistory.Count >= minBuffer)
         {
-            if (m_inputHistory.Find(m_serverTick, out var index) && m_inputHistory.Count - index > maxBuffer)
+            if (InputHistory.Find(m_serverTick, out var index) && InputHistory.Count - index > maxBuffer)
             {
-                int targetIndex = m_inputHistory.Count - minBuffer;
-                ulong newTick = m_inputHistory.GetEntryTick(targetIndex);
+                int targetIndex = InputHistory.Count - minBuffer;
+                ulong newTick = InputHistory.GetEntryTick(targetIndex);
 
                 Debug.LogError($"Too many inputs behind, we need to catch up. Skipped {newTick - m_serverTick} ticks.");
 
                 m_serverTick = newTick;
             }
 
-            bool validState = m_inputHistory.Read(m_serverTick, out var input);
+            bool validState = InputHistory.Read(m_serverTick, out var input);
 
             if (!validState)
             {
-                if (m_inputHistory.MostRecentTick < m_serverTick)
+                if (InputHistory.MostRecentTick < m_serverTick)
                 {
                     Debug.LogError("Waiting for missing tick.");
                     return;
@@ -218,8 +218,8 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
             Simulate(input, TimeManager.TickDelta, false);
             var serverState = GatherCurrentState();
 
-            m_stateHistory.Read(m_serverTick, out var clientState);
-            m_stateHistory.Write(m_serverTick, serverState);
+            StateHistory.Read(m_serverTick, out var clientState);
+            StateHistory.Write(m_serverTick, serverState);
 
 
             if (HasError(serverState, clientState))
@@ -260,21 +260,21 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
     {
         S serverState = ReadArray<S>(rawServerState);
 
-        bool validClientState = m_stateHistory.Read(tick, out var clientState);
+        bool validClientState = StateHistory.Read(tick, out var clientState);
         bool needsReconcile = HasError(clientState, serverState);
         
         if (!validClientState || !needsReconcile) return;
 
-        ulong presentTick = m_stateHistory.MostRecentTick;
+        ulong presentTick = StateHistory.MostRecentTick;
 
-        m_stateHistory.ClearFuture(tick, true);
-        m_stateHistory.Write(tick, serverState);
+        StateHistory.ClearFuture(tick, true);
+        StateHistory.Write(tick, serverState);
 
         ApplyState(serverState);
 
         for (ulong t = tick + 1; t <= presentTick; ++t)
         {
-            if (!m_inputHistory.Read(t, out var input))
+            if (!InputHistory.Read(t, out var input))
             {
                 Debug.LogError($"Client skipping missing input at tick {t}");
                 continue;
@@ -283,7 +283,7 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
             Simulate(input, TimeManager.TickDelta, true);
 
             var newState = GatherCurrentState();
-            m_stateHistory.Write(t, newState);
+            StateHistory.Write(t, newState);
         }
     }
 
@@ -294,10 +294,10 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
     [ServerRpc(RequireOwnership = true, RunLocally = true, DataLength = MEMORY_CAPACITY)]
     void SendInput(ulong tick, byte[] rawInput, byte[] rawState)
     {
-        bool firstInput = m_inputHistory.Count == 0;
+        bool firstInput = InputHistory.Count == 0;
 
         // Safety checks
-        if (firstInput || tick > m_inputHistory.MostRecentTick)
+        if (firstInput || tick > InputHistory.MostRecentTick)
         {
             if (firstInput)
             {
@@ -308,8 +308,8 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
             I input = ReadArray<I>(rawInput);
             S state = ReadArray<S>(rawState);
 
-            m_inputHistory.Write(tick, input);
-            m_stateHistory.Write(tick, state);
+            InputHistory.Write(tick, input);
+            StateHistory.Write(tick, state);
         }
         else
         {

@@ -1,10 +1,12 @@
 using UnityEngine;
 
+[System.Serializable]
 public struct BPlayerInput
 {
     public Vector2Int MoveInput;
 }
 
+[System.Serializable]
 public struct BPlayerState
 {
     public Vector3 Position;
