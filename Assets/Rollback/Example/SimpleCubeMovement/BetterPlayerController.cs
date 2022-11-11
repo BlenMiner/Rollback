@@ -1,3 +1,4 @@
+using Riten.Authorative;
 using Riten.Rollback;
 using UnityEngine;
 
