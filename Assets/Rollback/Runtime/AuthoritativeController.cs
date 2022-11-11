@@ -2,6 +2,10 @@ using UnityEngine;
 using Riten.Rollback;
 using FishNet.Object;
 using FishNet.Connection;
+using System.Runtime.Serialization.Formatters.Binary;
+using System.IO;
+using System.Runtime.Serialization;
+using System;
 
 /// <summary>
 /// This interface allows to check if two structs are essentially different
@@ -43,6 +47,14 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
 
         public int HistoryBufferSize;
     }
+
+    const int MEMORY_CAPACITY = 1024;
+
+    static BinaryFormatter FORMATTER = new BinaryFormatter();
+
+    static MemoryStream STREAM = new (MEMORY_CAPACITY);
+
+    static byte[] BUFFER = new byte[MEMORY_CAPACITY];
 
     [SerializeField] AuthoritativeSettings m_authoritativeSettings;
 
@@ -154,6 +166,17 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
         TimeManager.OnTick += OnClientTick;
     }
 
+    public override void OnStartNetwork()
+    {
+        base.OnStartNetwork();
+
+        if( !typeof(I).IsSerializable && !(typeof(ISerializable).IsAssignableFrom(typeof(I)) ) )
+            throw new InvalidOperationException("Input struct must be Serializable");
+
+                if( !typeof(S).IsSerializable && !(typeof(ISerializable).IsAssignableFrom(typeof(S)) ) )
+            throw new InvalidOperationException("State struct must be serializable");
+    }
+
     public override void OnStopNetwork()
     {
         base.OnStopNetwork();
@@ -170,7 +193,7 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
         var input = GatherCurrentInput();
 
         Simulate(input, TimeManager.TickDelta, false);
-        SendInput(tick, input, GatherCurrentState());
+        SendInput(tick, ToArray(input), ToArray(GatherCurrentState()));
     }
 
 
@@ -217,7 +240,7 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
 
             if (serverState.HasError(clientState))
             {
-                Reconcile(Owner, m_serverTick, serverState);
+                Reconcile(Owner, m_serverTick, ToArray(serverState));
             }
 
             m_serverTick += 1;
@@ -225,13 +248,34 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
     }
 
     /// <summary>
+    /// Generic aren't supported so this deserialized the data to get our struct back
+    /// </summary>
+    T ReadArray<T>(byte[] data)
+    {
+        STREAM.Write(data, 0, data.Length);
+        return (T)FORMATTER.Deserialize(STREAM);
+    }
+
+    /// <summary>
+    /// Generic aren't supported so this serialized the data to bytes
+    /// </summary>
+    byte[] ToArray<T>(T data)
+    {
+        FORMATTER.Serialize(STREAM, data);
+        STREAM.Read(BUFFER, 0, (int)STREAM.Length);
+        return BUFFER;
+    }
+
+    /// <summary>
     /// The server calls this when it notices an issue only otherwise this won't be called.
     /// Even if this is called, we check for the error ourselves because if we rewrote the history 
     /// after sending the packets the server might be 'wrong'.
     /// </summary>
-    [TargetRpc]
-    void Reconcile(NetworkConnection conn, ulong tick, S serverState)
+    [TargetRpc(DataLength = MEMORY_CAPACITY)]
+    void Reconcile(NetworkConnection conn, ulong tick, byte[] rawServerState)
     {
+        S serverState = ReadArray<S>(rawServerState);
+
         bool validClientState = m_stateHistory.Read(tick, out var clientState);
         bool needsReconcile = clientState.HasError(serverState);
         
@@ -263,8 +307,8 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
     /// Send the input data along with the resulting movement to the server.
     /// The server will use the input to move the player and the resulting state to check for errors.
     /// </summary>
-    [ServerRpc(RequireOwnership = true, RunLocally = true)]
-    void SendInput(ulong tick, I input, S state)
+    [ServerRpc(RequireOwnership = true, RunLocally = true, DataLength = MEMORY_CAPACITY)]
+    void SendInput(ulong tick, byte[] rawInput, byte[] rawState)
     {
         bool firstInput = m_inputHistory.Count == 0;
 
@@ -276,6 +320,9 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
                 // Initialize server tick number
                 m_serverTick = tick;
             }
+
+            I input = ReadArray<I>(rawInput);
+            S state = ReadArray<S>(rawState);
 
             m_inputHistory.Write(tick, input);
             m_stateHistory.Write(tick, state);
