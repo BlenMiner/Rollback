@@ -3,6 +3,7 @@ using FishNet.Object;
 using FishNet.Connection;
 using System.Runtime.Serialization;
 using System;
+using Riten.Utils;
 
 namespace Riten.Authorative
 {
