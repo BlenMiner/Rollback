@@ -36,7 +36,7 @@ public class BetterPlayerController : NetworkedController, IAuthoritative<BPlaye
 
     void Awake()
     {
-        Initialize<BPlayerInput, BPlayerState>(this);
+        Initialize(this);
     }
 
     public BPlayerInput GatherCurrentInput()

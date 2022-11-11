@@ -10,6 +10,8 @@ public static class MemoryHelper
 
     static MemoryStream STREAM = new (MEMORY_CAPACITY);
 
+    public static object[] ONE_ARG = new object[1];
+
     public static byte[] BUFFER_I = new byte[MemoryHelper.MEMORY_CAPACITY];
 
     public static byte[] BUFFER_S = new byte[MemoryHelper.MEMORY_CAPACITY];
