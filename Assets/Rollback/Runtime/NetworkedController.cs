@@ -61,11 +61,15 @@ public abstract class NetworkedController : NetworkBehaviour
 
     Func<byte[]> GatherCurrentState;
 
+    Action<ulong, byte[]> RegisterInput;
+
+    Action<ulong, byte[]> RegisterState;
+
+    Func<ulong, byte[]> ReadInput;
+
     Action<byte[]> ApplyState;
 
     Action<byte[], double, bool> Simulate;
-
-    Func<byte[], byte[], bool> HasError;
 
     Func<ulong, double, int, int, Action<ulong, byte[]>, ulong> OnServerTickTranslator;
 
@@ -108,8 +112,6 @@ public abstract class NetworkedController : NetworkBehaviour
 
         Simulate = contract.Simulate;
 
-        HasError = contract.HasError;
-
         ApplyState = contract.ApplyState;
 
         ReconcileTranslator = contract.Reconcile;
@@ -117,6 +119,20 @@ public abstract class NetworkedController : NetworkBehaviour
         OnServerTickTranslator = contract.OnServerTick;
 
         SendInputTranslator = contract.SendInput;
+
+        RegisterInput = (tick, input) => {
+            contract.InputHistory.Write(tick, MemoryHelper.ReadArray<I>(input));
+        };
+
+        RegisterState = (tick, state) => {
+            contract.StateHistory.Write(tick, MemoryHelper.ReadArray<S>(state));
+        };
+
+        ReadInput = (tick) => {
+            contract.InputHistory.Read(tick, out var input);
+            MemoryHelper.WriteArray<I>(input, MemoryHelper.BUFFER_I);
+            return MemoryHelper.BUFFER_I;
+        };
     }
 
     public override void OnStartServer()
@@ -131,6 +147,7 @@ public abstract class NetworkedController : NetworkBehaviour
         base.OnStartClient();
 
         TimeManager.OnTick += OnClientTick;
+        TimeManager.OnPostTick += OnClientPostTick;
     }
 
     public override void OnStartNetwork()
@@ -142,7 +159,12 @@ public abstract class NetworkedController : NetworkBehaviour
     {
         base.OnStopNetwork();
 
-        if (IsClient) TimeManager.OnTick -= OnClientTick;
+        if (IsClient) 
+        {
+            TimeManager.OnTick -= OnClientTick;
+            TimeManager.OnPostTick -= OnClientPostTick;
+        }
+        
         if (IsServer) TimeManager.OnTick -= OnServerTick;
     }
 
@@ -154,7 +176,17 @@ public abstract class NetworkedController : NetworkBehaviour
         var input = GatherCurrentInput();
 
         Simulate(input, TimeManager.TickDelta, false);
-        SendInput(tick, input, GatherCurrentState());
+        RegisterInput(tick, input);
+    }
+
+    private void OnClientPostTick()
+    {
+        ulong tick = TimeManager.LocalTick;
+
+        var state = GatherCurrentState();
+
+        RegisterState(tick, state);
+        SendInput(tick, ReadInput(tick), state);
     }
 
     private void OnServerTick()
@@ -187,7 +219,7 @@ public abstract class NetworkedController : NetworkBehaviour
     /// Send the input data along with the resulting movement to the server.
     /// The server will use the input to move the player and the resulting state to check for errors.
     /// </summary>
-    [ServerRpc(RequireOwnership = true, RunLocally = true, DataLength = MemoryHelper.MEMORY_CAPACITY)]
+    [ServerRpc(RequireOwnership = true, DataLength = MemoryHelper.MEMORY_CAPACITY)]
     void SendInput(ulong tick, byte[] input, byte[] state)
     {
         SendInputTranslator(tick, input, state, UpdateServerTick);

@@ -665,6 +665,22 @@ MonoBehaviour:
   _color: {r: 1, g: 1, b: 1, a: 1}
   _placement: 1
   _hideTickRate: 1
+--- !u!114 &1332526734
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 256631630}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8bc8f0363ddc75946a958043c5e49a83, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _color: {r: 1, g: 1, b: 1, a: 1}
+  _placement: 3
+  _showOutgoing: 1
+  _showIncoming: 1
 --- !u!1 &1428293685
 GameObject:
   m_ObjectHideFlags: 0
