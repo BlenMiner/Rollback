@@ -83,11 +83,14 @@ public abstract class NetworkedController : NetworkBehaviour
         where I : struct
         where S : struct
     {
+
+#if UNITY_EDITOR
         if( !typeof(I).IsSerializable && !(typeof(ISerializable).IsAssignableFrom(typeof(I)) ) )
-            throw new InvalidOperationException($"{typeof(I).Name} struct must be serializable.");
+            throw new InvalidOperationException($"{typeof(I).Name} struct must be serializable: <b>[System.Serializable]</b>");
 
         if( !typeof(S).IsSerializable && !(typeof(ISerializable).IsAssignableFrom(typeof(S)) ) )
-            throw new InvalidOperationException($"{typeof(S).Name} struct must be serializable.");
+            throw new InvalidOperationException($"{typeof(S).Name} struct must be serializable: <b>[System.Serializable]</b>");
+#endif
 
         contract.Initialize(m_authoritativeSettings.HistoryBufferSize);
 
