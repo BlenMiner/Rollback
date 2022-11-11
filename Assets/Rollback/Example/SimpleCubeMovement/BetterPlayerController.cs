@@ -13,7 +13,18 @@ public struct BPlayerInput
 [System.Serializable]
 public struct BPlayerState
 {
-    public Vector3 Position;
+    public float PosX, PosY, PosZ;
+
+    public Vector3 Position
+    {
+        get => new Vector3(PosX, PosY, PosZ);
+        set
+        {
+            PosX = value.x;
+            PosY = value.y;
+            PosZ = value.z;
+        }
+    }
 }
 
 public class BetterPlayerController : AuthoritativeController<BPlayerInput, BPlayerState>
