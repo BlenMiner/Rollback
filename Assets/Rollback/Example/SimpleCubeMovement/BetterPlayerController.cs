@@ -1,3 +1,4 @@
+using Riten.Rollback;
 using UnityEngine;
 
 [System.Serializable]
@@ -27,9 +28,18 @@ public struct BPlayerState
     }
 }
 
-public class BetterPlayerController : AuthoritativeController<BPlayerInput, BPlayerState>
+public class BetterPlayerController : NetworkedController, IAuthoritative<BPlayerInput, BPlayerState>
 {
-    public override BPlayerInput GatherCurrentInput()
+    public History<BPlayerInput> InputHistory { get; set; }
+
+    public History<BPlayerState> StateHistory { get; set; }
+
+    void Awake()
+    {
+        Initialize<BPlayerInput, BPlayerState>(this);
+    }
+
+    public BPlayerInput GatherCurrentInput()
     {
         int horizontal = (Input.GetKey(KeyCode.D) ? 1 : 0) - (Input.GetKey(KeyCode.Q) ? 1 : 0);
         int vertical = (Input.GetKey(KeyCode.Z) ? 1 : 0) - (Input.GetKey(KeyCode.S) ? 1 : 0);
@@ -41,7 +51,7 @@ public class BetterPlayerController : AuthoritativeController<BPlayerInput, BPla
         };
     }
 
-    public override BPlayerState GatherCurrentState()
+    public BPlayerState GatherCurrentState()
     {
         return new BPlayerState
         {
@@ -49,17 +59,17 @@ public class BetterPlayerController : AuthoritativeController<BPlayerInput, BPla
         };
     }
 
-    public override bool HasError(BPlayerState stateA, BPlayerState stateB)
+    public bool HasError(BPlayerState stateA, BPlayerState stateB)
     {
         return Vector3.Distance(stateA.Position, stateB.Position) > 0.001f;
     }
 
-    public override void ApplyState(BPlayerState state)
+    public void ApplyState(BPlayerState state)
     {
         transform.position = state.Position;
     }
 
-    public override void Simulate(BPlayerInput input, double delta, bool replay)
+    public void Simulate(BPlayerInput input, double delta, bool replay)
     {
         const float SPEED = 10f;
 
@@ -75,7 +85,7 @@ public class BetterPlayerController : AuthoritativeController<BPlayerInput, BPla
     }
 
     static RaycastHit[] CACHE = new RaycastHit[512];
- 
+
     void TranslateWithCollision(Vector3 move)
     {
         const float SKIN_SIZE = 0.1f;

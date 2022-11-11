@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: -8596692122080690134}
   - component: {fileID: 4932293197446674612}
   m_Layer: 0
-  m_Name: Player
+  m_Name: CubePlayer
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -124,7 +124,7 @@ MonoBehaviour:
   <PrefabId>k__BackingField: 4
   _scenePathHash: 0
   <SceneId>k__BackingField: 0
-  <AssetPathHash>k__BackingField: 16001771773652068620
+  <AssetPathHash>k__BackingField: 17927262077528416746
   _sceneNetworkObjects: []
 --- !u!114 &4932293197446674612
 MonoBehaviour:
