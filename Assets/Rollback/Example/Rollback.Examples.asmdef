@@ -1,0 +1,18 @@
+{
+    "name": "Rollback.Examples",
+    "rootNamespace": "",
+    "references": [
+        "GUID:3c88aab1eb582964b969440357d41d5a",
+        "GUID:8ccce8322c0a09d4da076678647fc0ee",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
