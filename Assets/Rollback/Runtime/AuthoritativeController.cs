@@ -113,7 +113,9 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
     }
 
     /// <summary>
-    /// This function will be used to gather the user's input to move them around
+    /// Gets called on the OnTick event on the client only once.
+    /// This function will be used to gather the user's input to move them around.
+    /// Be careful with checking for KeyDown or KeyUp, it might not catch it, rather check in Update and lazy load here.
     /// </summary>
     /// <returns>This tick's user input</returns>
     public abstract I GatherCurrentInput();
@@ -164,7 +166,11 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
     {
         if (!IsOwner) return;
 
+        ulong tick = TimeManager.LocalTick;
+        var input = GatherCurrentInput();
 
+        Simulate(input, TimeManager.TickDelta, false);
+        SendInput(tick, input, GatherCurrentState());
     }
 
 
@@ -172,7 +178,50 @@ public abstract class AuthoritativeController<I, S> : NetworkBehaviour
     {
         if (IsOwner) return;
 
+        int minBuffer = m_authoritativeSettings.MinServerBufferSize;
+        int maxBuffer = m_authoritativeSettings.MaxServerBufferSize;
 
+        if (m_inputHistory.Count >= minBuffer)
+        {
+            if (m_inputHistory.Find(m_serverTick, out var index) && m_inputHistory.Count - index > maxBuffer)
+            {
+                int targetIndex = m_inputHistory.Count - minBuffer;
+                ulong newTick = m_inputHistory.GetEntryTick(targetIndex);
+
+                Debug.LogError($"Too many inputs behind, we need to catch up. Skipped {newTick - m_serverTick} ticks.");
+
+                m_serverTick = newTick;
+            }
+
+            bool validState = m_inputHistory.Read(m_serverTick, out var input);
+
+            if (!validState)
+            {
+                if (m_inputHistory.MostRecentTick < m_serverTick)
+                {
+                    Debug.LogError("Waiting for missing tick.");
+                    return;
+                }
+                else
+                {
+                    Debug.LogError("Packet dropped, skipped input frame.");
+                }
+            }
+
+            Simulate(input, TimeManager.TickDelta, false);
+            var serverState = GatherCurrentState();
+
+            m_stateHistory.Read(m_serverTick, out var clientState);
+            m_stateHistory.Write(m_serverTick, serverState);
+
+
+            if (serverState.HasError(clientState))
+            {
+                Reconcile(Owner, m_serverTick, serverState);
+            }
+
+            m_serverTick += 1;
+        }
     }
 
     /// <summary>
