@@ -29,7 +29,7 @@ public struct BPlayerState
     }
 }
 
-public class BetterPlayerController : NetworkedController, IAuthoritative<BPlayerInput, BPlayerState>
+public sealed class BetterPlayerController : NetworkedController, IAuthoritative<BPlayerInput, BPlayerState>
 {
     public History<BPlayerInput> InputHistory { get; set; }
 
