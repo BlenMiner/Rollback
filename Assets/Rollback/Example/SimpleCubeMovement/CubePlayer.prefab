@@ -114,7 +114,7 @@ MonoBehaviour:
   <IsNested>k__BackingField: 0
   <ComponentIndex>k__BackingField: 0
   _networkBehaviours:
-  - {fileID: 0}
+  - {fileID: 4932293197446674612}
   <ParentNetworkObject>k__BackingField: {fileID: 0}
   <ChildNetworkObjects>k__BackingField: []
   _isNetworked: 1
@@ -138,10 +138,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2a493be246f8115469afef774599f06d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: -8596692122080690134}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: -8596692122080690134}
   m_authoritativeSettings:
-    MinServerBufferSize: 5
-    MaxServerBufferSize: 10
+    MinServerBufferSize: 7
+    MaxServerBufferSize: 13
     HistoryBufferSize: 1024
