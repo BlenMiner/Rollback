@@ -11,7 +11,7 @@ namespace Riten.Authorative
     /// Fishnet networked authoritative controller with client prediction.
     /// The client controlling it has to be the owner.
     /// </summary>
-    public abstract class NetworkedController : NetworkBehaviour
+    public abstract class NetworkedController : NetworkBehaviour, IRollback
     {
         [System.Serializable]
         struct AuthoritativeSettings
@@ -28,27 +28,6 @@ namespace Riten.Authorative
 
         [SerializeField] AuthoritativeSettings m_authoritativeSettings;
 
-        /// <summary>
-        /// Which tick is currently being processed.
-        /// </summary>
-        /// <value>Tick number.</value>
-        public ulong ControllerTick
-        {
-            get
-            {
-                if (IsOwner)
-                {
-                    return TimeManager.LocalTick;
-                }
-                else
-                {
-                    return m_serverTick;
-                }
-            }
-        }
-
-        ulong m_serverTick;
-
         protected override void Reset()
         {
             base.Reset();
@@ -59,6 +38,8 @@ namespace Riten.Authorative
                 MinServerBufferSize = 5
             };
         }
+
+        bool m_noInputRequired = false;
 
         Func<byte[]> GatherCurrentInput;
 
@@ -72,13 +53,23 @@ namespace Riten.Authorative
 
         Action<byte[]> ApplyState;
 
+        Action<ulong> Rollback;
+
+        Action ResetStateTranslator;
+
         Action<byte[], double, bool> Simulate;
 
-        Func<ulong, double, int, int, Action<ulong, byte[]>, ulong> OnServerTickTranslator;
+        Action<double, bool> InputlessSimulate;
+
+        Action<ulong, double, int, int, Action<NetworkConnection, ulong, byte[]>> OnServerTickTranslator;
+
+        Action<ulong, double, Action<NetworkConnection, ulong, byte[]>> OnInputlessServerTickTranslator;
 
         Action<double, ulong, byte[]> ReconcileTranslator;
 
-        Action<ulong, byte[], byte[], Action<ulong>> SendInputTranslator;
+        Action<ulong, byte[], byte[]> SendInputTranslator;
+
+        Action<NetworkConnection, ulong, byte[]> SendStateTranslator;
 
         protected virtual void OnEnable()
         {
@@ -89,17 +80,19 @@ namespace Riten.Authorative
         {
             NetworkedScene.UnregisterController(this);
         }
-
+        
         /// <summary>
-        /// Gets called on the OnTick event on the client only once.
-        /// This function will be used to gather the user's input to move them around.
-        /// Be careful with checking for KeyDown or KeyUp, it might not catch it, rather check in Update and lazy load here.
+        /// Initializes the History params from the interface.
         /// </summary>
-        /// <returns>This tick's user input</returns>
+        /// <param name="contract">The controller instance aka 'this'</param>
+        /// <typeparam name="I">Input struct type</typeparam>
+        /// <typeparam name="S">State struct type</typeparam>
+        /// <returns></returns>
         public void Initialize<I, S>(IAuthoritative<I, S> contract)
             where I : struct
             where S : struct
         {
+            m_noInputRequired = false;
 
     #if UNITY_EDITOR
             if( !typeof(I).IsSerializable && !(typeof(ISerializable).IsAssignableFrom(typeof(I)) ) )
@@ -146,6 +139,74 @@ namespace Riten.Authorative
                 MemoryHelper.WriteArray<I>(input, MemoryHelper.BUFFER_I);
                 return MemoryHelper.BUFFER_I;
             };
+
+            Rollback = (tick) => {
+                if (contract.StateHistory.Read(tick, out var state))
+                {
+                    contract.ApplyState(state);
+                }
+            };
+
+            ResetStateTranslator = () => {
+                if (contract.StateHistory.Read(contract.StateHistory.MostRecentTick, out var state))
+                {
+                    contract.ApplyState(state);
+                }
+            };
+        }
+
+
+        /// <summary>
+        /// Initializes the History params from the interface.
+        /// </summary>
+        /// <param name="contract">The controller instance aka 'this'</param>
+        /// <typeparam name="S">State struct type</typeparam>
+        public void Initialize<S>(IAuthoritative<S> contract)
+            where S : struct
+        {
+            m_noInputRequired = true;
+
+    #if UNITY_EDITOR
+            if( !typeof(S).IsSerializable && !(typeof(ISerializable).IsAssignableFrom(typeof(S)) ) )
+                throw new InvalidOperationException($"{typeof(S).Name} struct must be serializable: <b>[System.Serializable]</b>");
+    #endif
+            contract.Initialize(m_authoritativeSettings.HistoryBufferSize);
+
+            GatherCurrentInput = null;
+
+            GatherCurrentState = () => {
+                var state = contract.GatherCurrentState();
+                MemoryHelper.WriteArray<S>(state, MemoryHelper.BUFFER_S);
+                return MemoryHelper.BUFFER_S;
+            };
+
+            InputlessSimulate = contract.Simulate;
+
+            ApplyState = contract.ApplyState;
+
+            ReconcileTranslator = contract.Reconcile;
+
+            OnInputlessServerTickTranslator = contract.OnServerTick;
+
+            SendStateTranslator = contract.SendState;
+
+            RegisterState = (tick, state) => {
+                contract.StateHistory.Write(tick, MemoryHelper.ReadArray<S>(state));
+            };
+
+            Rollback = (tick) => {
+                if (contract.StateHistory.Read(tick, out var state))
+                {
+                    contract.ApplyState(state);
+                }
+            };
+
+            ResetStateTranslator = () => {
+                if (contract.StateHistory.Read(contract.StateHistory.MostRecentTick, out var state))
+                {
+                    contract.ApplyState(state);
+                }
+            };
         }
 
         public override void OnStartServer()
@@ -181,40 +242,75 @@ namespace Riten.Authorative
             if (IsServer) TimeManager.OnTick -= OnServerTick;
         }
 
+        ulong CurrentTick => IsServer ? TimeManager.Tick : (TimeManager.Tick + TimeManager.TimeToTicks((TimeManager.RoundTripTime / 1000.0)));
+
+        void OnGUI()
+        {
+            if (!m_noInputRequired)
+            {
+                GUILayout.Label(CurrentTick.ToString());
+            }
+        }
+
         private void OnClientTick()
         {
+            if (m_noInputRequired)
+            {
+                InputlessSimulate(TimeManager.TickDelta, false);
+                return;
+            }
+
             if (!IsOwner) return;
 
-            ulong tick = TimeManager.LocalTick;
             var input = GatherCurrentInput();
-
             Simulate(input, TimeManager.TickDelta, false);
-            RegisterInput(tick, input);
+            RegisterInput(CurrentTick, input);
         }
 
         private void OnClientPostTick()
         {
-            ulong tick = TimeManager.LocalTick;
-
             var state = GatherCurrentState();
+            ulong tick = CurrentTick;
 
-            RegisterState(tick, state);
-            SendInput(tick, ReadInput(tick), state);
+            if (m_noInputRequired)
+            {
+                RegisterState(tick, state);
+                SendState(tick, state);
+            }
+            else if (IsOwner)
+            {
+                RegisterState(tick, state);
+                SendInput(tick, ReadInput(tick), state);
+            }
         }
 
         private void OnServerTick()
         {
             if (IsOwner) return;
 
-            int minBuffer = m_authoritativeSettings.MinServerBufferSize;
-            int maxBuffer = m_authoritativeSettings.MaxServerBufferSize;
+            if (m_noInputRequired)
+            {
+                OnInputlessServerTickTranslator(CurrentTick, TimeManager.TickDelta, PrepareReconcileData);
+            }
+            else
+            {
+                int minBuffer = m_authoritativeSettings.MinServerBufferSize;
+                int maxBuffer = m_authoritativeSettings.MaxServerBufferSize;
 
-            m_serverTick = OnServerTickTranslator(m_serverTick, TimeManager.TickDelta, minBuffer, maxBuffer, PrepareReconcileData);
+                OnServerTickTranslator(CurrentTick, TimeManager.TickDelta, minBuffer, maxBuffer, PrepareReconcileData);
+            }
         }
 
-        void PrepareReconcileData(ulong tick, byte[] data)
+        void PrepareReconcileData(NetworkConnection conn, ulong tick, byte[] data)
         {
-            Reconcile(Owner, tick, data);
+            if (m_noInputRequired)
+            {
+                Reconcile(conn, tick, data);
+            }
+            else
+            {
+                Reconcile(Owner, tick, data);
+            }
         }
 
         /// <summary>
@@ -222,7 +318,8 @@ namespace Riten.Authorative
         /// Even if this is called, we check for the error ourselves because if we rewrote the history 
         /// after sending the packets the server might be 'wrong'.
         /// </summary>
-        [TargetRpc(DataLength = MemoryHelper.MEMORY_CAPACITY)]
+        [ObserversRpc(DataLength = MemoryHelper.MEMORY_CAPACITY), 
+            TargetRpc(DataLength = MemoryHelper.MEMORY_CAPACITY)]
         void Reconcile(NetworkConnection conn, ulong tick, byte[] serverState)
         {
             ReconcileTranslator(TimeManager.TickDelta, tick, serverState);
@@ -235,12 +332,31 @@ namespace Riten.Authorative
         [ServerRpc(RequireOwnership = true, DataLength = MemoryHelper.MEMORY_CAPACITY)]
         void SendInput(ulong tick, byte[] input, byte[] state)
         {
-            SendInputTranslator(tick, input, state, UpdateServerTick);
+            if (m_noInputRequired) return;
+
+            SendInputTranslator(tick, input, state);
         }
 
-        void UpdateServerTick(ulong tick)
+        /// <summary>
+        /// Send the input data along with the resulting movement to the server.
+        /// The server will use the input to move the player and the resulting state to check for errors.
+        /// </summary>
+        [ServerRpc(RequireOwnership = false, DataLength = MemoryHelper.MEMORY_CAPACITY)]
+        void SendState(ulong tick, byte[] state, NetworkConnection conn = null)
         {
-            m_serverTick = tick;
+            if (!m_noInputRequired) return;
+
+            SendStateTranslator(conn, tick, state);
+        }
+
+        public void RollbackTo(ulong tick)
+        {
+            Rollback(tick);
+        }
+
+        public void ResetState()
+        {
+            ResetStateTranslator();
         }
     }
 }

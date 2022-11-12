@@ -143,5 +143,5 @@ MonoBehaviour:
   _networkObjectCache: {fileID: -8596692122080690134}
   m_authoritativeSettings:
     MinServerBufferSize: 7
-    MaxServerBufferSize: 13
+    MaxServerBufferSize: 15
     HistoryBufferSize: 1024

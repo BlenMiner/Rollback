@@ -44,6 +44,11 @@ namespace Riten.Rollback
             get => m_data.Count;
         }
 
+        public int Capacity
+        {
+            get => m_maxCount;
+        }
+
         /// <summary>
         /// Value of the most recent received tick
         /// </summary>

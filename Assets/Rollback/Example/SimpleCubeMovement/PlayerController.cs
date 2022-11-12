@@ -84,7 +84,7 @@ public sealed class PlayerController : NetworkBehaviour
         {
             if (m_inputHistory.Find(m_serverTick, out var index) && m_inputHistory.Count - index > m_maxServerBufferSize)
             {
-                int targetIndex = m_inputHistory.Count - m_minServerBufferSize;
+                int targetIndex = m_inputHistory.Count - m_minServerBufferSize - 1;
                 ulong newTick = m_inputHistory.GetEntryTick(targetIndex);
 
                 Debug.LogError($"Too many inputs behind, we need to catch up. Skipped {newTick - m_serverTick} ticks.");
